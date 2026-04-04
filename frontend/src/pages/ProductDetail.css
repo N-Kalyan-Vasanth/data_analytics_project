@@ -1,0 +1,103 @@
+/* ProductDetail.css */
+.back-btn { margin-bottom: 24px; padding: 10px 0; }
+
+.detail-hero {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 48px;
+  margin-bottom: 48px;
+  padding: 40px;
+}
+
+.detail-image {
+  height: 300px;
+  background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-emoji { font-size: 6rem; }
+
+.detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  justify-content: center;
+}
+
+.detail-name {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.detail-price {
+  font-family: 'Outfit', sans-serif;
+  font-size: 2.4rem;
+  font-weight: 800;
+  background: var(--gradient-main);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.add-btn { margin-top: 8px; width: fit-content; }
+.add-btn.added { background: linear-gradient(135deg, #10b981, #06b6d4) !important; }
+
+/* Recommendations section */
+.recs-section { margin-bottom: 48px; }
+
+.recs-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.recs-icon {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.recs-icon-purple { background: rgba(124,58,237,0.15); color: #a78bfa; }
+.recs-icon-amber  { background: rgba(245,158,11,0.15); color: #fcd34d; }
+
+.recs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.rec-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rec-card:hover {
+  border-color: rgba(124,58,237,0.4);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-glow);
+}
+
+.rec-emoji { font-size: 2rem; }
+.rec-name  { font-size: 0.85rem; font-weight: 600; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rec-price { font-weight: 700; color: var(--accent-1); }
+.rec-meta  { display: flex; gap: 6px; flex-wrap: wrap; }
+
+@media (max-width: 768px) {
+  .detail-hero { grid-template-columns: 1fr; }
+  .detail-image { height: 200px; }
+  .detail-emoji { font-size: 4rem; }
+}
