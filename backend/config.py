@@ -16,7 +16,12 @@ class Config:
     DATA_DIR = os.path.join(BASE_DIR, "data")
 
     # ── CORS allowed origins ─────────────────────────────────────────────────
-    CORS_ORIGINS = ["http://localhost:5173", "http://localhost:3000"]
+    _extra = os.environ.get("FRONTEND_URL", "")
+    CORS_ORIGINS = list(filter(None, [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        _extra,
+    ]))
 
     # ── ML result cache file (JSON) ──────────────────────────────────────────
     CACHE_FILE = os.path.join(BASE_DIR, "db", "ml_cache.json")

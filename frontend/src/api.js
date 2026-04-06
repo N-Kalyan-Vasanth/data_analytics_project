@@ -1,7 +1,11 @@
 // api.js — Centralised API client
 // All API calls go through this module so base URL changes in one place.
 
-const BASE = '/api';  // Proxied to http://localhost:5000 via vite.config.js
+// In production (Render), VITE_API_URL is set to the backend service URL.
+// In local dev, it falls back to /api which Vite proxies to localhost:5000.
+const BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : '/api';
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, {
