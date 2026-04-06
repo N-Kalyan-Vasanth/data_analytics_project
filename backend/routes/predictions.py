@@ -114,8 +114,8 @@ def get_summary():
 
 
 # ── GET /api/predictions/by-item/<item_id> ────────────────────────────────────
-@predictions_bp.route("/api/predictions/by-item/<int:item_id>", methods=["GET"])
-def get_item_prediction(item_id):
+@predictions_bp.route("/api/predictions/by-item/<string:item_id>", methods=["GET"])
+def get_prediction_for_item(item_id):
     """Return monthly sales history for a specific item."""
     cleaned = get_cached_cleaned_sales()
     if cleaned.empty:

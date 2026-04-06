@@ -8,8 +8,9 @@ Endpoints:
 """
 import json
 import os
+import time
 from flask import Blueprint, jsonify, request, current_app
-from models import Item
+from models import Item, db
 from ml.preprocessing import load_raw_data, get_cached_cleaned_sales, build_sequences
 from ml.sequential_module import run_prefixspan, get_next_item_recommendations
 
@@ -18,18 +19,32 @@ patterns_bp = Blueprint("patterns", __name__)
 # In-memory cache
 _seq_cache = None
 _patterns_cache = None
+_cache_time = None
+_CACHE_TTL = 3600  # Cache for 1 hour
 
 
 def _get_patterns():
-    global _seq_cache, _patterns_cache
+    global _seq_cache, _patterns_cache, _cache_time
 
-    if _patterns_cache is not None:
-        return _patterns_cache
+    # Return cached result if still valid
+    if _patterns_cache is not None and _cache_time is not None:
+        elapsed = time.time() - _cache_time
+        if elapsed < _CACHE_TTL:
+            print(f"[patterns] Returning cached patterns (age: {elapsed:.1f}s)")
+            return _patterns_cache
 
+    print("[patterns] Cache miss - rebuilding patterns...")
     cleaned = get_cached_cleaned_sales()
     if cleaned.empty:
+        print("[patterns] No cleaned sales data available")
         return {"patterns": [], "n_sequences": 0, "n_patterns": 0}
-    sequences = build_sequences(cleaned, n_shops=50, max_items=100)
+    
+    # Increase limits for better pattern generation
+    sequences = build_sequences(cleaned, n_shops=500, max_items=200)
+    if not sequences:
+        print("[patterns] No sequences built")
+        return {"patterns": [], "n_sequences": 0, "n_patterns": 0}
+    
     _seq_cache = sequences
 
     result = run_prefixspan(
@@ -38,20 +53,41 @@ def _get_patterns():
         max_pattern_len=4,
         max_results=100,
     )
+    
     _patterns_cache = result
+    _cache_time = time.time()
+    print(f"[patterns] Cache updated at {_cache_time}")
     return result
 
 
 def _enrich_pattern(pattern_entry: dict) -> dict:
-    """Add item names to each element in the pattern."""
+    """Add item names to each element in the pattern using a single efficient query."""
     enriched = dict(pattern_entry)
     named_pattern = []
+    
+    # Collect all unique item IDs
+    all_ids = set()
+    for itemset in pattern_entry.get("pattern", []):
+        all_ids.update(itemset)
+    
+    # Fetch all items in one query
+    if all_ids:
+        items = db.session.query(Item).filter(Item.id.in_(list(all_ids))).all()
+        item_map = {item.id: item.name for item in items}
+    else:
+        item_map = {}
+    
+    # Build named pattern using the map
     for itemset in pattern_entry.get("pattern", []):
         names = []
         for iid in itemset:
-            item = Item.query.get(int(iid))
-            names.append({"id": int(iid), "name": item.name[:60] if item else f"Item {iid}"})
+            item_name = item_map.get(iid, f"Item {iid}")
+            # Ensure proper encoding
+            if isinstance(item_name, str):
+                item_name = item_name.encode('utf-8', errors='replace').decode('utf-8')
+            names.append({"id": str(iid), "name": item_name[:60]})
         named_pattern.append(names)
+    
     enriched["named_pattern"] = named_pattern
     return enriched
 
@@ -70,13 +106,14 @@ def get_sequential_patterns():
 
     patterns = result.get("patterns", [])[:limit]
 
-    # Enrich top 10 patterns with item names (DB lookups are slow)
+    # Enrich top 15 patterns with item names (batch fetch is now efficient)
     enriched = []
     for i, p in enumerate(patterns):
-        if i < 10:
+        if i < 15:
             try:
                 enriched.append(_enrich_pattern(p))
-            except Exception:
+            except Exception as e:
+                print(f"[patterns] Error enriching pattern {i}: {e}")
                 enriched.append(p)
         else:
             enriched.append(p)
@@ -93,8 +130,8 @@ def get_sequential_patterns():
 
 
 # ── GET /api/patterns/next/<item_id> ─────────────────────────────────────────
-@patterns_bp.route("/api/patterns/next/<int:item_id>", methods=["GET"])
-def get_next_recommendations(item_id):
+@patterns_bp.route("/api/patterns/next/<string:item_id>", methods=["GET"])
+def get_next_purchase_patterns(item_id):
     """
     Return 'Customers also buy next' recommendations based on sequential patterns.
     """
@@ -106,7 +143,7 @@ def get_next_recommendations(item_id):
     # Enrich with item names
     enriched_recs = []
     for rec in recs:
-        item = Item.query.get(int(rec["item_id"]))
+        item = Item.query.get(str(rec["item_id"]))
         enriched_recs.append(
             {
                 "item_id": rec["item_id"],

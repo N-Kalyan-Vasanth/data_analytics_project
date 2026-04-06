@@ -26,25 +26,8 @@ def _p(name: str) -> str:
 # ── 1. Load raw CSVs ──────────────────────────────────────────────────────────
 @lru_cache(maxsize=1)
 def load_raw_data() -> dict:
-    """
-    Load all CSV files into a dict of DataFrames.
-    Caches the result in memory so subsequent calls are instant.
-
-    Returns:
-        {
-          'sales':      DataFrame (main training set),
-          'test':       DataFrame,
-          'items':      DataFrame,
-          'categories': DataFrame,
-          'shops':      DataFrame,
-        }
-    """
     files = {
-        "sales":      "sales_train.csv",
-        "test":       "test.csv",
-        "items":      "items.csv",
-        "categories": "item_categories.csv",
-        "shops":      "shops.csv",
+        "sales": "online_retail.csv",
     }
     data = {}
     for key, fname in files.items():
@@ -60,44 +43,47 @@ def load_raw_data() -> dict:
 
 @lru_cache(maxsize=1)
 def get_cached_cleaned_sales() -> pd.DataFrame:
-    """Read and clean sales data once, cache it permanently in memory."""
     data = load_raw_data()
     if "sales" not in data or data["sales"].empty:
         return pd.DataFrame()
     return clean_sales(data["sales"])
 
 
-
 # ── 2. Clean sales data ───────────────────────────────────────────────────────
 def clean_sales(sales_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Clean the raw sales DataFrame:
-      - Remove rows where item_cnt_day < 0 (refunds)
-      - Remove rows where item_price <= 0
-      - Remove extreme outliers (price > 99th percentile)
-      - Parse the date column
-
-    Args:
-        sales_df: Raw sales DataFrame from sales_train.csv
-
-    Returns:
-        Cleaned DataFrame
-    """
     df = sales_df.copy()
 
+    # Drop missing values
+    df.dropna(subset=['InvoiceDate', 'StockCode', 'Quantity', 'Price', 'Customer ID'], inplace=True)
+    
+    # Remove cancellations (Invoice starts with 'C')
+    if 'Invoice' in df.columns:
+        df['Invoice'] = df['Invoice'].astype(str)
+        df = df[~df['Invoice'].str.startswith(('C', 'c'))]
+    
     # Keep positive quantities only
-    df = df[df["item_cnt_day"] > 0]
+    df = df[df["Quantity"] > 0]
 
     # Keep positive prices only
-    df = df[df["item_price"] > 0]
+    df = df[df["Price"] > 0]
 
     # Remove extreme price outliers (top 1%)
-    price_cap = df["item_price"].quantile(0.99)
-    df = df[df["item_price"] <= price_cap]
+    price_cap = df["Price"].quantile(0.99)
+    df = df[df["Price"] <= price_cap]
 
-    # Skipping slow datetime parsing of 3 million rows (takes ~15s)
-    # df["date"] = pd.to_datetime(df["date"], format="%d.%m.%Y", errors="coerce")
-    # df.dropna(subset=["date"], inplace=True)
+    # Map the columns so downstream processes work exactly the same
+    df.rename(columns={
+        'Invoice': 'transaction_id_orig',
+        'StockCode': 'item_id',
+        'Description': 'item_name',
+        'Quantity': 'item_cnt_day',
+        'Price': 'item_price',
+        'Customer ID': 'shop_id',
+        'InvoiceDate': 'date'
+    }, inplace=True)
+
+    df['date'] = pd.to_datetime(df['date'])
+    df['year_month_str'] = df["date"].dt.strftime("%Y-%m")
 
     df.reset_index(drop=True, inplace=True)
     print(f"[preprocessing] After cleaning: {df.shape[0]} rows")
@@ -107,11 +93,6 @@ def clean_sales(sales_df: pd.DataFrame) -> pd.DataFrame:
 # ── 3. Monthly aggregation ─────────────────────────────────────────────────────
 def aggregate_monthly(sales_df: pd.DataFrame) -> pd.DataFrame:
     df = sales_df.copy()
-    
-    # Fast vectorized year-month from date_block_num
-    y = 2013 + (df["date_block_num"] // 12)
-    m = (df["date_block_num"] % 12) + 1
-    df["year_month_str"] = y.astype(str) + "-" + m.astype(str).str.zfill(2)
     
     df["revenue"] = df["item_price"] * df["item_cnt_day"]
 
@@ -129,9 +110,6 @@ def aggregate_monthly(sales_df: pd.DataFrame) -> pd.DataFrame:
 
 def aggregate_monthly_by_item(sales_df: pd.DataFrame) -> pd.DataFrame:
     df = sales_df.copy()
-    y = 2013 + (df["date_block_num"] // 12)
-    m = (df["date_block_num"] % 12) + 1
-    df["year_month_str"] = y.astype(str) + "-" + m.astype(str).str.zfill(2)
     
     df["revenue"] = df["item_price"] * df["item_cnt_day"]
 
@@ -149,26 +127,9 @@ def aggregate_monthly_by_item(sales_df: pd.DataFrame) -> pd.DataFrame:
 # ── 4. Transaction matrix for Apriori / FP-Growth ────────────────────────────
 def build_transaction_matrix(
     sales_df: pd.DataFrame,
-    group_by: str = "shop_month",
-    max_items: int = 200,
+    group_by: str = "shop_day",
+    max_items: int = 50,
 ) -> pd.DataFrame:
-    """
-    Build a boolean one-hot encoded basket matrix for association rule mining.
-
-    Each row = one "transaction" (a shop in a given month).
-    Each column = one item (True/False = bought or not bought).
-
-    We limit to the top `max_items` most frequently bought items to keep
-    the matrix manageable.
-
-    Args:
-        sales_df: Cleaned sales DataFrame
-        group_by:  'shop_month' (default) or 'shop_day'
-        max_items: How many of the most popular items to include
-
-    Returns:
-        Binary DataFrame (rows=transactions, cols=item_ids as strings)
-    """
     df = sales_df.copy()
 
     # Select top N most-sold items to reduce matrix size
@@ -183,14 +144,11 @@ def build_transaction_matrix(
     # Create transaction key
     if group_by == "shop_month":
         df["transaction_id"] = (
-            df["shop_id"].astype(str) + "_" + df["date_block_num"].astype(str)
+            df["shop_id"].astype(str) + "_" + df["year_month_str"]
         )
     else:
-        df["transaction_id"] = (
-            df["shop_id"].astype(str)
-            + "_"
-            + df["date"].dt.strftime("%Y%m%d")
-        )
+        # Real Invoice number
+        df["transaction_id"] = df["transaction_id_orig"].astype(str)
 
     # Pivot to one-hot matrix
     basket = (
@@ -208,27 +166,13 @@ def build_transaction_matrix(
 # ── 5. Sequences for PrefixSpan ──────────────────────────────────────────────
 def build_sequences(
     sales_df: pd.DataFrame,
-    n_shops: int = 50,
-    max_items: int = 100,
+    n_shops: int = 30,
+    max_items: int = 50,
 ) -> list:
-    """
-    Build ordered purchase sequences per shop for sequential pattern mining.
-
-    Each sequence = list of itemsets ordered by date_block_num (month).
-    Each itemset = frozenset of item_ids bought that month by that shop.
-
-    Args:
-        sales_df: Cleaned sales DataFrame
-        n_shops:  Limit to first N shops (for performance)
-        max_items: Limit to top N items by sales volume
-
-    Returns:
-        List of sequences; each sequence is a list of frozensets.
-        Example: [{101}, {101, 205}, {88}]
-    """
     df = sales_df.copy()
+    print(f"[preprocessing] Building sequences from {len(df)} rows...")
 
-    # Limit to top items
+    print(f"[preprocessing] Finding top {max_items} items by sales volume...")
     top_items = (
         df.groupby("item_id")["item_cnt_day"]
         .sum()
@@ -236,31 +180,33 @@ def build_sequences(
         .index.tolist()
     )
     df = df[df["item_id"].isin(top_items)]
+    print(f"[preprocessing] Filtered to top {len(top_items)} items, {len(df)} rows remaining")
 
-    # Use first N shops
-    shops = df["shop_id"].unique()[:n_shops]
+    shots = df["shop_id"].dropna().unique()
+    shops = np.random.choice(shots, min(n_shops, len(shots)), replace=False) if len(shots) > 0 else []
+    
     df = df[df["shop_id"].isin(shops)]
+    print(f"[preprocessing] Using {len(shops)} shops, {len(df)} rows remaining")
 
     sequences = []
-    for shop_id, shop_df in df.groupby("shop_id"):
+    for i, (shop_id, shop_df) in enumerate(df.groupby("shop_id")):
+        if i % 10 == 0:
+            print(f"[preprocessing] Processing shop {i+1}/{len(shops)}...")
         # Order by month
-        shop_df = shop_df.sort_values("date_block_num")
+        shop_df = shop_df.sort_values("year_month_str")
         seq = []
-        for _, month_df in shop_df.groupby("date_block_num"):
+        for _, month_df in shop_df.groupby("year_month_str"):
             itemset = frozenset(month_df["item_id"].unique())
             seq.append(itemset)
-        if len(seq) >= 2:  # only include shops with at least 2 months
+        if len(seq) >= 2:
             sequences.append(seq)
 
-    print(f"[preprocessing] Built {len(sequences)} sequences")
+    print(f"[preprocessing] Built {len(sequences)} sequences from {len(shops)} shops")
     return sequences
 
 
 # ── 6. Top selling items summary ──────────────────────────────────────────────
-def get_top_items(sales_df: pd.DataFrame, items_df: pd.DataFrame, n: int = 10) -> list:
-    """
-    Return the top N items by total units sold, with item names.
-    """
+def get_top_items(sales_df: pd.DataFrame, items_df: pd.DataFrame = None, n: int = 10) -> list:
     top = (
         sales_df.groupby("item_id")["item_cnt_day"]
         .sum()
@@ -268,5 +214,9 @@ def get_top_items(sales_df: pd.DataFrame, items_df: pd.DataFrame, n: int = 10) -
         .reset_index()
     )
     top.columns = ["item_id", "total_sold"]
-    top = top.merge(items_df[["item_id", "item_name"]], on="item_id", how="left")
+    
+    # Get descriptions
+    desc_map = sales_df.drop_duplicates(subset=['item_id']).set_index('item_id')['item_name'].to_dict()
+    top['item_name'] = top['item_id'].map(desc_map)
+
     return top.to_dict(orient="records")

@@ -117,7 +117,7 @@ export default function Dashboard() {
   });
 
   const topItemsChartData = topItems.slice(0, 8).map(item => ({
-    name: item.name?.slice(0, 15) + (item.name?.length > 15 ? '…' : ''),
+    name: String(item.id || item.item_id || ''),
     sold: item.total_sold,
   }));
 
@@ -176,14 +176,14 @@ export default function Dashboard() {
         >
           {/* Tab selector */}
           <div className="chart-tabs">
-            {['arima', 'moving_avg', 'forecast'].map(tab => (
+            {['arima', 'moving_avg'].map(tab => (
               <button
                 key={tab}
                 className={`chart-tab ${activeTab === tab ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab)}
                 id={`tab-${tab}`}
               >
-                {tab === 'arima' ? 'ARIMA Fit' : tab === 'moving_avg' ? 'Moving Average' : 'Forecast Comparison'}
+                {tab === 'arima' ? 'ARIMA Fit' : 'Moving Average'}
               </button>
             ))}
           </div>
@@ -233,19 +233,7 @@ export default function Dashboard() {
               </ResponsiveContainer>
             )}
 
-            {predictions && activeTab === 'forecast' && (
-              <ResponsiveContainer width="100%" height={340}>
-                <BarChart data={forecastData.filter(d => d.ARIMA || d.MA)}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="month" stroke="#5c5b7a" tick={{ fontSize: 11 }} />
-                  <YAxis stroke="#5c5b7a" tick={{ fontSize: 11 }} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Bar dataKey="ARIMA" fill="#7c3aed" radius={[4,4,0,0]} />
-                  <Bar dataKey="MA" fill="#06b6d4" radius={[4,4,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
+
           </div>
 
           {predictions?.arima?.metrics && (
@@ -373,15 +361,15 @@ export default function Dashboard() {
                     <tr key={i}>
                       <td>
                         <div className="rule-items">
-                          {(rule.antecedent_names || rule.antecedents).slice(0, 2).map((n, j) => (
-                            <span key={j} className="rule-item rule-item-purple">{n}</span>
+                          {rule.antecedents.slice(0, 2).map((id, j) => (
+                            <span key={j} className="rule-item rule-item-purple">{id}</span>
                           ))}
                         </div>
                       </td>
                       <td>
                         <div className="rule-items">
-                          {(rule.consequent_names || rule.consequents).slice(0, 2).map((n, j) => (
-                            <span key={j} className="rule-item rule-item-cyan">{n}</span>
+                          {rule.consequents.slice(0, 2).map((id, j) => (
+                            <span key={j} className="rule-item rule-item-cyan">{id}</span>
                           ))}
                         </div>
                       </td>
@@ -400,12 +388,21 @@ export default function Dashboard() {
         <DashSection
           id="seq-patterns"
           title="Sequential Purchase Patterns"
-          subtitle={patterns ? `${patterns.n_patterns} patterns found via PrefixSpan across ${patterns.n_sequences} sequences` : 'Loading…'}
+          subtitle={
+            patterns 
+              ? `${patterns.n_patterns} patterns found via PrefixSpan across ${patterns.n_sequences} sequences`
+              : 'Mining sequential patterns (may take up to 60 seconds on first load)...'
+          }
         >
           {!patterns ? (
-            <div className="skeleton" style={{ height: 300, borderRadius: 12 }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '40px', color: '#8894ab' }}>
+              <div style={{ width: '20px', height: '20px', border: '2px solid #8894ab', borderTop: '2px solid #60a5fa', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+              <span>Mining sequential patterns from purchase history...</span>
+            </div>
+          ) : patterns.error ? (
+            <p className="text-muted" style={{ color: '#ef4444' }}>Error: {patterns.error}</p>
           ) : patterns.patterns?.length === 0 ? (
-            <p className="text-muted">No patterns found. Check SEQ_MIN_SUPPORT in config.</p>
+            <p className="text-muted">No patterns found. Check SEQ_MIN_SUPPORT in config or ensure sufficient data.</p>
           ) : (
             <div className="patterns-grid">
               {patterns.patterns.slice(0, 12).map((p, i) => (
@@ -415,10 +412,7 @@ export default function Dashboard() {
                     {p.pattern.map((itemset, j) => (
                       <div key={j} className="pattern-step">
                         <div className="pattern-itemset">
-                          {p.named_pattern?.[j]
-                            ? p.named_pattern[j].map(n => <span key={n.id} className="item-chip">{n.name}</span>)
-                            : itemset.map(iid => <span key={iid} className="item-chip">Item {iid}</span>)
-                          }
+                          {itemset.map(iid => <span key={iid} className="item-chip">{iid}</span>)}
                         </div>
                         {j < p.pattern.length - 1 && <div className="pattern-arrow">→</div>}
                       </div>

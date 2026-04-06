@@ -47,7 +47,7 @@ def _get_rules(algorithm: str = "fpgrowth") -> dict:
     cleaned = get_cached_cleaned_sales()
     if cleaned.empty:
         return {"rules": [], "frequent_itemsets": [], "n_rules": 0}
-    basket = build_transaction_matrix(cleaned, max_items=200)
+    basket = build_transaction_matrix(cleaned, max_items=50)
 
     cfg = current_app.config
     if algorithm == "apriori":
@@ -102,8 +102,8 @@ def _enrich_rule_with_names(rule: dict) -> dict:
 
 
 # ── GET /api/recommendations/<item_id> ───────────────────────────────────────
-@recs_bp.route("/api/recommendations/<int:item_id>", methods=["GET"])
-def get_recommendations(item_id):
+@recs_bp.route("/api/recommendations/<string:item_id>", methods=["GET"])
+def get_recommendations_for_item(item_id):
     """
     Return 'Frequently Bought Together' items for a given product.
     Uses FP-Growth rules (faster) by default.
@@ -186,7 +186,7 @@ def compare_algorithms():
     cleaned = get_cached_cleaned_sales()
     if cleaned.empty:
         return jsonify({"error": "No sales data available"}), 500
-    basket = build_transaction_matrix(cleaned, max_items=150)
+    basket = build_transaction_matrix(cleaned, max_items=50)
 
     cfg = current_app.config
     kwargs = dict(

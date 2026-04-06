@@ -1,0 +1,53 @@
+﻿--- 1. Loading and Sampling Data ---
+[preprocessing] Loaded sales_train.csv: (2935849, 6)
+[preprocessing] Loaded test.csv: (214200, 3)
+[preprocessing] Loaded items.csv: (22170, 3)
+[preprocessing] Loaded item_categories.csv: (84, 2)
+[preprocessing] Loaded shops.csv: (62, 2)
+[preprocessing] After cleaning: 9866 rows
+Sample size: 9866 rows
+Sample Attributes: ['date', 'date_block_num', 'shop_id', 'item_id', 'item_price', 'item_cnt_day']
+
+Sample Values (First 5 Rows):
+         date  date_block_num  shop_id  item_id  item_price  item_cnt_day
+0  02.01.2013               0       59    22154      999.00           1.0
+1  03.01.2013               0       25     2552      899.00           1.0
+2  06.01.2013               0       25     2554     1709.05           1.0
+3  15.01.2013               0       25     2555     1099.00           1.0
+4  10.01.2013               0       25     2564      349.00           1.0
+
+--- 2. Association Rule Mining (Apriori vs FP-Growth) ---
+[preprocessing] Transaction matrix shape: (4, 20)
+Apriori found 50 rules in 29.59ms
+FP-Growth found 50 rules in 25.25ms
+
+Example Association Rules (Apriori/FP-Growth):
+Rule: ['14826', '6953'] -> ['16832']
+  Support: 0.25, Confidence: 1.0, Lift: 4.0
+Rule: ['11041', '14826'] -> ['16832']
+  Support: 0.25, Confidence: 1.0, Lift: 4.0
+Rule: ['16832'] -> ['14826', '6953']
+  Support: 0.25, Confidence: 1.0, Lift: 4.0
+
+--- 3. Time Series Analysis (ARIMA vs Moving Average) ---
+Note: Sample size too small for meaningful ARIMA, using more data from main sales_df...
+[preprocessing] After cleaning: 98705 rows
+
+ARIMA Predictions (Next 3 Months):
+  Month: 2013-02, Predicted Sales: 113453.0
+  Month: 2013-03, Predicted Sales: 113453.0
+  Month: 2013-04, Predicted Sales: 113453.0
+
+Moving Average Predictions (Next 3 Months):
+  Month: 2013-02, Predicted Sales: 113453.0
+  Month: 2013-03, Predicted Sales: 113453.0
+  Month: 2013-04, Predicted Sales: 113453.0
+
+--- 4. Sequential Pattern Matching (PrefixSpan) ---
+[preprocessing] Building sequences from 9866 rows...
+[preprocessing] Finding top 20 items by sales volume...
+[preprocessing] Filtered to top 20 items, 748 rows remaining
+[preprocessing] Using 4 shops, 748 rows remaining
+[preprocessing] Processing shop 1/4...
+[preprocessing] Built 0 sequences from 4 shops
+PrefixSpan found 0 sequential patterns

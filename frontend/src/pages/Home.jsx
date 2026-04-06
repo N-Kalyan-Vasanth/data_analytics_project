@@ -88,9 +88,9 @@ export default function Home() {
           {/* Floating stats */}
           <div className="hero-stats">
             {[
-              { label: 'Products', value: '22K+' },
-              { label: 'Shops', value: '60+' },
-              { label: 'Sales Records', value: '2.9M' },
+              { label: 'Products', value: '4K+' },
+              { label: 'Customers', value: '4K+' },
+              { label: 'Sales Records', value: '525K+' },
               { label: 'ML Algorithms', value: '4' },
             ].map(stat => (
               <div key={stat.label} className="hero-stat">

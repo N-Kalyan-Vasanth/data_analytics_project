@@ -25,6 +25,10 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Ensure UTF-8 encoding for all JSON responses
+    app.config['JSON_SORT_KEYS'] = False
+    app.json.ensure_ascii = False  # Allow non-ASCII characters in JSON
+
     # Secret key for session cookies (cart)
     app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-prod")
 

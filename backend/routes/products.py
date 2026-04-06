@@ -71,7 +71,7 @@ def search_products():
 
 
 # ── GET /api/products/<id> ────────────────────────────────────────────────────
-@products_bp.route("/api/products/<int:item_id>", methods=["GET"])
+@products_bp.route("/api/products/<string:item_id>", methods=["GET"])
 def get_product(item_id):
     """Return a single product by item_id."""
     item = Item.query.options(joinedload(Item.category)).get_or_404(item_id)

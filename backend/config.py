@@ -32,4 +32,4 @@ class Config:
     FORECAST_MONTHS = 3      # months to forecast beyond last data point
 
     # ── Sequential pattern mining ────────────────────────────────────────────
-    SEQ_MIN_SUPPORT = 0.01   # minimum support for PrefixSpan
+    SEQ_MIN_SUPPORT = 0.0005   # minimum support for PrefixSpan
